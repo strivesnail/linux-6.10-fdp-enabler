@@ -317,6 +317,10 @@ struct queue_limits {
 	unsigned char		misaligned;
 	unsigned char		discard_misaligned;
 	unsigned char		raid_partial_stripes_expensive;
+	
+	unsigned short		max_write_streams;
+	unsigned int		write_stream_granularity;
+
 	bool			zoned;
 	unsigned int		max_open_zones;
 	unsigned int		max_active_zones;
@@ -1126,6 +1130,11 @@ enum blk_default_limits {
  */
 #define BLK_DEF_MAX_SECTORS_CAP	2560u
 
+static inline struct queue_limits *bdev_limits(struct block_device *bdev)
+{
+	return &bdev_get_queue(bdev)->limits;
+}
+
 static inline unsigned long queue_segment_boundary(const struct request_queue *q)
 {
 	return q->limits.seg_boundary_mask;
@@ -1166,6 +1175,16 @@ static inline unsigned int queue_max_segment_size(const struct request_queue *q)
 	return q->limits.max_segment_size;
 }
 
+static inline unsigned int queue_max_write_streams(const struct request_queue *q)
+{
+	return q->limits.max_write_streams;
+}
+
+static inline unsigned int queue_write_stream_granularity(const struct request_queue *q)
+{
+	return q->limits.write_stream_granularity;
+}
+
 static inline unsigned int queue_limits_max_zone_append_sectors(struct queue_limits *l)
 {
 	unsigned int max_sectors = min(l->chunk_sectors, l->max_hw_sectors);
@@ -1200,6 +1219,19 @@ bdev_max_zone_append_sectors(struct block_device *bdev)
 static inline unsigned int bdev_max_segments(struct block_device *bdev)
 {
 	return queue_max_segments(bdev_get_queue(bdev));
+}
+
+static inline unsigned short bdev_max_write_streams(struct block_device *bdev)
+{
+	if (bdev_is_partition(bdev))
+		return bdev->bd_part_write_streams;
+	return bdev_limits(bdev)->max_write_streams;
+}
+
+static inline unsigned int
+bdev_write_stream_granularity(struct block_device *bdev)
+{
+	return bdev_limits(bdev)->write_stream_granularity;
 }
 
 static inline unsigned queue_logical_block_size(const struct request_queue *q)

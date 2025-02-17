@@ -804,13 +804,17 @@ static enum elv_merge blk_try_req_merge(struct request *req,
 static struct request *attempt_merge(struct request_queue *q,
 				     struct request *req, struct request *next)
 {
+	if (req->bio->bi_write_hint != next->bio->bi_write_hint)
+		return NULL;
+	if (req->bio->bi_write_stream != next->bio->bi_write_stream)
+		return NULL;
+	if (req->bio->bi_ioprio != next->bio->bi_ioprio)
+		return NULL;
+
 	if (!rq_mergeable(req) || !rq_mergeable(next))
 		return NULL;
 
 	if (req_op(req) != req_op(next))
-		return NULL;
-
-	if (rq_data_dir(req) != rq_data_dir(next))
 		return NULL;
 
 	/* Don't merge requests with different write hints. */
@@ -928,10 +932,6 @@ bool blk_rq_merge_ok(struct request *rq, struct bio *bio)
 	if (req_op(rq) != bio_op(bio))
 		return false;
 
-	/* different data direction or already started, don't merge */
-	if (bio_data_dir(bio) != rq_data_dir(rq))
-		return false;
-
 	/* don't merge across cgroup boundaries */
 	if (!blk_cgroup_mergeable(rq, bio))
 		return false;
@@ -942,6 +942,15 @@ bool blk_rq_merge_ok(struct request *rq, struct bio *bio)
 
 	/* Only merge if the crypt contexts are compatible */
 	if (!bio_crypt_rq_ctx_compatible(rq, bio))
+		return false;
+
+	if (rq->bio->bi_write_hint != bio->bi_write_hint)
+		return false;
+
+	if (rq->bio->bi_write_stream != bio->bi_write_stream)
+		return false;
+
+	if (rq->bio->bi_ioprio != bio->bi_ioprio)
 		return false;
 
 	/* Don't merge requests with different write hints. */

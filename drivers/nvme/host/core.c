@@ -36,6 +36,7 @@ struct nvme_ns_info {
 	struct nvme_ns_ids ids;
 	u32 nsid;
 	__le32 anagrpid;
+	u16 endgid;
 	bool is_shared;
 	bool is_readonly;
 	bool is_ready;
@@ -135,6 +136,8 @@ static void nvme_remove_invalid_namespaces(struct nvme_ctrl *ctrl,
 					   unsigned nsid);
 static void nvme_update_keep_alive(struct nvme_ctrl *ctrl,
 				   struct nvme_command *cmd);
+static int nvme_get_log_lsi(struct nvme_ctrl *ctrl, u32 nsid, u8 log_page,
+		u8 lsp, u8 csi, void *log, size_t size, u64 offset, u16 lsi);
 
 void nvme_queue_scan(struct nvme_ctrl *ctrl)
 {
@@ -655,6 +658,7 @@ static void nvme_free_ns_head(struct kref *ref)
 	ida_free(&head->subsys->ns_ida, head->instance);
 	cleanup_srcu_struct(&head->srcu);
 	nvme_put_subsystem(head->subsys);
+	kfree(head->plids);
 	kfree(head);
 }
 
@@ -941,6 +945,15 @@ static inline blk_status_t nvme_setup_rw(struct nvme_ns *ns,
 
 	if (req->cmd_flags & REQ_RAHEAD)
 		dsmgmt |= NVME_RW_DSM_FREQ_PREFETCH;
+
+	if (op == nvme_cmd_write && ns->head->nr_plids) {
+		u16 write_stream = req->bio->bi_write_stream;
+
+		if (WARN_ON_ONCE(write_stream > ns->head->nr_plids))
+			return BLK_STS_INVAL;
+		dsmgmt |= ns->head->plids[write_stream - 1] << 16;
+		control |= NVME_RW_DTYPE_DPLCMT;
+	}
 
 	cmnd->rw.opcode = op;
 	cmnd->rw.flags = 0;
@@ -1548,6 +1561,7 @@ static int nvme_ns_info_from_identify(struct nvme_ctrl *ctrl,
 	}
 
 	info->anagrpid = id->anagrpid;
+	info->endgid = le16_to_cpu(id->endgid);
 	info->is_shared = id->nmic & NVME_NS_NMIC_SHARED;
 	info->is_readonly = id->nsattr & NVME_NS_ATTR_RO;
 	info->is_ready = true;
@@ -1586,6 +1600,7 @@ static int nvme_ns_info_from_id_cs_indep(struct nvme_ctrl *ctrl,
 	ret = nvme_submit_sync_cmd(ctrl->admin_q, &c, id, sizeof(*id));
 	if (!ret) {
 		info->anagrpid = id->anagrpid;
+		info->endgid = le16_to_cpu(id->endgid);
 		info->is_shared = id->nmic & NVME_NS_NMIC_SHARED;
 		info->is_readonly = id->nsattr & NVME_NS_ATTR_RO;
 		info->is_ready = id->nstat & NVME_NSTAT_NRDY;
@@ -1614,7 +1629,7 @@ static int nvme_features(struct nvme_ctrl *dev, u8 op, unsigned int fid,
 
 int nvme_set_features(struct nvme_ctrl *dev, unsigned int fid,
 		      unsigned int dword11, void *buffer, size_t buflen,
-		      u32 *result)
+		      void *result)
 {
 	return nvme_features(dev, nvme_admin_set_features, fid, dword11, buffer,
 			     buflen, result);
@@ -1623,7 +1638,7 @@ EXPORT_SYMBOL_GPL(nvme_set_features);
 
 int nvme_get_features(struct nvme_ctrl *dev, unsigned int fid,
 		      unsigned int dword11, void *buffer, size_t buflen,
-		      u32 *result)
+		      void *result)
 {
 	return nvme_features(dev, nvme_admin_get_features, fid, dword11, buffer,
 			     buflen, result);
@@ -2055,6 +2070,107 @@ static int nvme_update_ns_info_generic(struct nvme_ns *ns,
 	return ret;
 }
 
+static int nvme_read_fdp_config(struct nvme_ns *ns, struct nvme_ns_info *info)
+{
+	struct nvme_fdp_config result;
+	struct nvme_fdp_config_log *log;
+	struct nvme_fdp_config_desc *configs;
+	size_t log_size;
+	int error;
+
+	error = nvme_get_features(ns->ctrl, NVME_FEAT_FDP, info->endgid, NULL,
+			0, &result);
+	if (error)
+		return error;
+
+	if (!(result.flags & FDPCFG_FDPE)) {
+		dev_warn(ns->ctrl->device, "FDP not enable in current config\n");
+		return -EINVAL;
+	}
+
+	log_size = sizeof(*log) + (result.fdpcidx + 1) * sizeof(*configs);
+	log = kmalloc(log_size, GFP_KERNEL);
+	if (!log)
+		return -ENOMEM;
+
+	error = nvme_get_log_lsi(ns->ctrl, info->nsid, NVME_LOG_FDP_CONFIGS,
+			0, 0, log, log_size, 0, info->endgid);
+	if (error) {
+		dev_warn(ns->ctrl->device,
+			"failed to read FDP config log: 0x%x\n", error);
+		goto out_free_log;
+	}
+
+	if (le32_to_cpu(log->size) < log_size) {
+		dev_warn(ns->ctrl->device, "FDP log too small: %d vs %zd\n",
+				le32_to_cpu(log->size), log_size);
+		error = -EINVAL;
+		goto out_free_log;
+	}
+
+	configs = (struct nvme_fdp_config_desc *)(log + 1);
+	if (le32_to_cpu(configs[result.fdpcidx].nrg) > 1) {
+		dev_warn(ns->ctrl->device, "FDP NRG > 1 not supported\n");
+		return -EINVAL;
+	}
+	ns->head->runs = le64_to_cpu(configs[result.fdpcidx].runs);
+
+out_free_log:
+	kfree(log);
+	return error;
+}
+
+static int nvme_fetch_fdp_plids(struct nvme_ns *ns, u32 nsid)
+{
+	struct nvme_ns_head *head = ns->head;
+	struct nvme_fdp_ruh_status *ruhs;
+	const unsigned int max_nr_plids = S8_MAX - 1;
+	size_t size = struct_size(ruhs, ruhsd, max_nr_plids);
+	struct nvme_command c = {
+		.imr.opcode	= nvme_cmd_io_mgmt_recv,
+		.imr.nsid	= cpu_to_le32(nsid),
+		.imr.mo		= NVME_IO_MGMT_RECV_MO_RUHS,
+		.imr.numd	= cpu_to_le32(nvme_bytes_to_numd(size)),
+	};
+	int ret, i;
+
+	ruhs = kzalloc(size, GFP_KERNEL);
+	if (!ruhs)
+		return -ENOMEM;
+
+	ret = nvme_submit_sync_cmd(ns->queue, &c, ruhs, size);
+	if (ret) {
+		dev_warn(ns->ctrl->device,
+			"failed to read FDP reclaim unit handles: 0x%x\n", ret);
+		goto out;
+	}
+
+	ns->head->nr_plids = le16_to_cpu(ruhs->nruhsd);
+	if (!ns->head->nr_plids)
+		goto out;
+
+	if (ns->head->nr_plids > max_nr_plids) {
+		dev_info(ns->ctrl->device,
+			"capping max write streams from %d to %d\n",
+			ns->head->nr_plids, max_nr_plids);
+		ns->head->nr_plids = max_nr_plids;
+	}
+
+	head->plids = kcalloc(ns->head->nr_plids, sizeof(head->plids),
+			      GFP_KERNEL);
+	if (!head->plids) {
+		ret = -ENOMEM;
+		goto out;
+	}
+
+	for (i = 0; i < ns->head->nr_plids; i++)
+		head->plids[i] = le16_to_cpu(ruhs->ruhsd[i].pid);
+
+out:
+	kfree(ruhs);
+	return ret;
+}
+
 static int nvme_update_ns_info_block(struct nvme_ns *ns,
 		struct nvme_ns_info *info)
 {
@@ -2092,6 +2208,18 @@ static int nvme_update_ns_info_block(struct nvme_ns *ns,
 			goto out;
 	}
 
+	if (!(ns->ctrl->ctratt & NVME_CTRL_ATTR_FDPS)) {
+		ns->head->nr_plids = 0;
+		kfree(ns->head->plids);
+		ns->head->plids = NULL;
+	} else if (!ns->head->plids) {
+		ret = nvme_read_fdp_config(ns, info);
+		if (!ret)
+			ret = nvme_fetch_fdp_plids(ns, info->nsid);
+		if (ret < 0)
+			goto out;
+	}
+
 	blk_mq_freeze_queue(ns->disk->queue);
 	ns->head->lba_shift = id->lbaf[lbaf].ds;
 	ns->head->nuse = le64_to_cpu(id->nuse);
@@ -2107,6 +2235,11 @@ static int nvme_update_ns_info_block(struct nvme_ns *ns,
 	if (IS_ENABLED(CONFIG_BLK_DEV_ZONED) &&
 	    ns->head->ids.csi == NVME_CSI_ZNS)
 		nvme_update_zone_info(ns, &lim, &zi);
+
+	lim.max_write_streams = ns->head->nr_plids;
+	if (lim.max_write_streams)
+		lim.write_stream_granularity = ns->head->runs;
+
 	ret = queue_limits_commit_update(ns->disk->queue, &lim);
 	if (ret) {
 		blk_mq_unfreeze_queue(ns->disk->queue);
@@ -2197,6 +2330,10 @@ static int nvme_update_ns_info(struct nvme_ns *ns, struct nvme_ns_info *info)
 			ns->head->disk->flags |= GENHD_FL_HIDDEN;
 		else
 			nvme_init_integrity(ns->head->disk, ns->head);
+
+		lim.max_write_streams = ns_lim->max_write_streams;
+		lim.write_stream_granularity = ns_lim->write_stream_granularity;
+
 		set_capacity_and_notify(ns->head->disk, get_capacity(ns->disk));
 		set_disk_ro(ns->head->disk, nvme_ns_is_readonly(ns, info));
 		nvme_mpath_revalidate_paths(ns);
@@ -2952,8 +3089,8 @@ out_unlock:
 	return ret;
 }
 
-int nvme_get_log(struct nvme_ctrl *ctrl, u32 nsid, u8 log_page, u8 lsp, u8 csi,
-		void *log, size_t size, u64 offset)
+static int nvme_get_log_lsi(struct nvme_ctrl *ctrl, u32 nsid, u8 log_page,
+		u8 lsp, u8 csi, void *log, size_t size, u64 offset, u16 lsi)
 {
 	struct nvme_command c = { };
 	u32 dwlen = nvme_bytes_to_numd(size);
@@ -2967,8 +3104,16 @@ int nvme_get_log(struct nvme_ctrl *ctrl, u32 nsid, u8 log_page, u8 lsp, u8 csi,
 	c.get_log_page.lpol = cpu_to_le32(lower_32_bits(offset));
 	c.get_log_page.lpou = cpu_to_le32(upper_32_bits(offset));
 	c.get_log_page.csi = csi;
+	c.get_log_page.lsi = cpu_to_le16(lsi);
 
 	return nvme_submit_sync_cmd(ctrl->admin_q, &c, log, size);
+}
+
+int nvme_get_log(struct nvme_ctrl *ctrl, u32 nsid, u8 log_page, u8 lsp, u8 csi,
+		void *log, size_t size, u64 offset)
+{
+	return nvme_get_log_lsi(ctrl, nsid, log_page, lsp, csi, log, size,
+			offset, 0);
 }
 
 static int nvme_get_effects_log(struct nvme_ctrl *ctrl, u8 csi,
@@ -3529,6 +3674,7 @@ static struct nvme_ns_head *nvme_alloc_ns_head(struct nvme_ctrl *ctrl,
 	head->ns_id = info->nsid;
 	head->ids = info->ids;
 	head->shared = info->is_shared;
+	head->endgid = info->endgid;
 	ratelimit_state_init(&head->rs_nuse, 5 * HZ, 1);
 	ratelimit_set_flags(&head->rs_nuse, RATELIMIT_MSG_ON_RELEASE);
 	kref_init(&head->ref);

@@ -433,6 +433,15 @@ struct block_device *bdev_alloc(struct gendisk *disk, u8 partno)
 		return NULL;
 	}
 	bdev->bd_disk = disk;
+
+	/*
+	 * Assign all write streams to the first partition by default.
+	 */
+	if (partno == 1) {
+		bdev->bd_part_write_stream_start = 0;
+		bdev->bd_part_write_streams = bdev_max_write_streams(bdev);
+	}
+
 	return bdev;
 }
 

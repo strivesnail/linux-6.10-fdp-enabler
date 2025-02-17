@@ -71,6 +71,13 @@ struct block_device {
 
 	struct partition_meta_info *bd_meta_info;
 	int			bd_writers;
+
+	/*
+	 * Allow assigning write streams to partitions.
+	 */
+	unsigned short		bd_part_write_streams;
+	unsigned short		bd_part_write_stream_start;
+
 	/*
 	 * keep this out-of-line as it's both big and not needed in the fast
 	 * path
@@ -162,6 +169,11 @@ typedef u16 blk_short_t;
  */
 #define BLK_STS_DURATION_LIMIT	((__force blk_status_t)17)
 
+/*
+ * Invalid size or alignment.
+ */
+ #define BLK_STS_INVAL	((__force blk_status_t)19)
+
 /**
  * blk_path_error - returns true if error may be path related
  * @error: status the request was completed with
@@ -212,6 +224,7 @@ struct bio {
 	unsigned short		bi_flags;	/* BIO_* below */
 	unsigned short		bi_ioprio;
 	enum rw_hint		bi_write_hint;
+	u8			bi_write_stream;
 	blk_status_t		bi_status;
 	atomic_t		__bi_remaining;
 

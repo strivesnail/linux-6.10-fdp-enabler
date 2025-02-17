@@ -128,6 +128,16 @@ static ssize_t queue_max_segment_size_show(struct request_queue *q, char *page)
 	return queue_var_show(queue_max_segment_size(q), page);
 }
 
+static ssize_t queue_max_write_streams_show(struct request_queue *q, char *page)
+{
+	return queue_var_show(queue_max_write_streams(q), page);
+}
+
+static ssize_t queue_write_stream_granularity_show(struct request_queue *q, char *page)
+{
+	return queue_var_show(queue_write_stream_granularity(q), page);
+}
+
 static ssize_t queue_logical_block_size_show(struct request_queue *q, char *page)
 {
 	return queue_var_show(queue_logical_block_size(q), page);
@@ -481,6 +491,8 @@ QUEUE_RO_ENTRY(queue_max_hw_sectors, "max_hw_sectors_kb");
 QUEUE_RO_ENTRY(queue_max_segments, "max_segments");
 QUEUE_RO_ENTRY(queue_max_integrity_segments, "max_integrity_segments");
 QUEUE_RO_ENTRY(queue_max_segment_size, "max_segment_size");
+QUEUE_RO_ENTRY(queue_max_write_streams, "max_write_streams");
+QUEUE_RO_ENTRY(queue_write_stream_granularity, "write_stream_granularity");
 QUEUE_RW_ENTRY(elv_iosched, "scheduler");
 
 QUEUE_RO_ENTRY(queue_logical_block_size, "logical_block_size");
@@ -608,6 +620,8 @@ static struct attribute *queue_attrs[] = {
 	&queue_max_discard_segments_entry.attr,
 	&queue_max_integrity_segments_entry.attr,
 	&queue_max_segment_size_entry.attr,
+	&queue_max_write_streams_entry.attr,
+	&queue_write_stream_granularity_entry.attr,
 	&queue_hw_sector_size_entry.attr,
 	&queue_logical_block_size_entry.attr,
 	&queue_physical_block_size_entry.attr,

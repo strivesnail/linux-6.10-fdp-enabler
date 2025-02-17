@@ -1046,6 +1046,54 @@ static ssize_t partscan_show(struct device *dev,
 	return sprintf(buf, "%u\n", disk_has_partscan(dev_to_disk(dev)));
 }
 
+static ssize_t disk_distribute_write_streams_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	/* Anything useful to show here like the ranges? */
+	return sysfs_emit(buf, "0\n");
+}
+
+static ssize_t disk_distribute_write_streams_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct gendisk *disk = dev_to_disk(dev);
+	struct block_device *bdev = disk->part0, *part;
+	unsigned short total_write_streams =
+		disk->queue->limits.max_write_streams;
+	unsigned short part_write_streams, part_write_stream_start = 0;
+	unsigned long nr_partitions = 0, idx;
+	int error = 0;
+
+	if (!total_write_streams)
+		return -EINVAL;
+
+	mutex_lock(&disk->open_mutex);
+	if (atomic_read(&bdev->bd_openers)) {
+		error = -EBUSY;
+		goto out_unlock;
+	}
+
+	xa_for_each_start(&disk->part_tbl, idx, part, 1)
+		nr_partitions++;
+	if (!nr_partitions)
+		goto out_unlock;
+
+	part_write_streams = total_write_streams / nr_partitions;
+	xa_for_each_start(&disk->part_tbl, idx, part, 1) {
+		part->bd_part_write_streams = part_write_streams;
+		part->bd_part_write_stream_start = part_write_stream_start;
+		part_write_stream_start += part_write_streams;
+		dev_info(dev,
+			"assigning %u write streams at %u to partition %lu\n",
+			part_write_streams, part_write_stream_start, idx - 1);
+	}
+out_unlock:
+	mutex_unlock(&disk->open_mutex);
+	if (error)
+		return error;
+	return count;
+}
+
 static DEVICE_ATTR(range, 0444, disk_range_show, NULL);
 static DEVICE_ATTR(ext_range, 0444, disk_ext_range_show, NULL);
 static DEVICE_ATTR(removable, 0444, disk_removable_show, NULL);
@@ -1060,6 +1108,9 @@ static DEVICE_ATTR(inflight, 0444, part_inflight_show, NULL);
 static DEVICE_ATTR(badblocks, 0644, disk_badblocks_show, disk_badblocks_store);
 static DEVICE_ATTR(diskseq, 0444, diskseq_show, NULL);
 static DEVICE_ATTR(partscan, 0444, partscan_show, NULL);
+static DEVICE_ATTR(distribute_write_streams, 0644,
+	disk_distribute_write_streams_show,
+	disk_distribute_write_streams_store);
 
 #ifdef CONFIG_FAIL_MAKE_REQUEST
 ssize_t part_fail_show(struct device *dev,
@@ -1111,6 +1162,7 @@ static struct attribute *disk_attrs[] = {
 	&dev_attr_events_poll_msecs.attr,
 	&dev_attr_diskseq.attr,
 	&dev_attr_partscan.attr,
+	&dev_attr_distribute_write_streams.attr,
 #ifdef CONFIG_FAIL_MAKE_REQUEST
 	&dev_attr_fail.attr,
 #endif

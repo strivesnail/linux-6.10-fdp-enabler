@@ -242,8 +242,10 @@ static const struct attribute_group *part_attr_groups[] = {
 
 static void part_release(struct device *dev)
 {
-	put_disk(dev_to_bdev(dev)->bd_disk);
-	bdev_drop(dev_to_bdev(dev));
+	struct block_device *part = dev_to_bdev(dev);
+
+	put_disk(part->bd_disk);
+	bdev_drop(part);
 }
 
 static int part_uevent(const struct device *dev, struct kobj_uevent_env *env)
