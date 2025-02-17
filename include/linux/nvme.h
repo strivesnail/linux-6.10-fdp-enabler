@@ -633,7 +633,7 @@ struct nvme_fdp_config_desc {
 };
 
 struct nvme_fdp_config_log {
-	__le16			n;
+	__le16			n;				/* numfdpc */
 	__u8			version;
 	__u8			reserved;
 	__le32			size;
