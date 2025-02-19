@@ -959,6 +959,7 @@ static inline blk_status_t nvme_setup_rw(struct nvme_ns *ns,
 			control |= NVME_RW_DTYPE_DPLCMT;
 		}
 	}
+	// printk(KERN_INFO "nvme_setup_rw: op=%d req->write_hint=%d\n", op, req->write_hint);
 
 	cmnd->rw.opcode = op;
 	cmnd->rw.flags = 0;

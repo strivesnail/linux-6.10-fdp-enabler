@@ -2550,6 +2550,7 @@ static void blk_mq_bio_to_request(struct request *rq, struct bio *bio,
 
 	rq->__sector = bio->bi_iter.bi_sector;
 	rq->write_hint = bio->bi_write_hint;
+	// printk(KERN_INFO "blk_mq_bio_to_request : rq->write_hint %d\n", rq->write_hint);
 	blk_rq_bio_prep(rq, bio, nr_segs);
 
 	/* This can't fail, since GFP_NOIO includes __GFP_DIRECT_RECLAIM. */
@@ -2994,6 +2995,7 @@ new_request:
 	rq_qos_track(q, rq, bio);
 
 	blk_mq_bio_to_request(rq, bio, nr_segs);
+	printk(KERN_INFO "blk_mq_submit_bio : preparing the bio request \n");
 
 	ret = blk_crypto_rq_get_keyslot(rq);
 	if (ret != BLK_STS_OK) {

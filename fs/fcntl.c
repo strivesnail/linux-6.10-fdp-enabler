@@ -285,6 +285,7 @@ static bool rw_hint_valid(u64 hint)
 	case RWH_WRITE_LIFE_MEDIUM:
 	case RWH_WRITE_LIFE_LONG:
 	case RWH_WRITE_LIFE_EXTREME:
+		printk(KERN_INFO "rw_hint_valid : RWH_WRITE_LIFE %llu\n", hint);
 		return true;
 	default:
 		return false;
@@ -449,9 +450,11 @@ static long do_fcntl(int fd, unsigned int cmd, unsigned long arg,
 		err = memfd_fcntl(filp, cmd, argi);
 		break;
 	case F_GET_RW_HINT:
+		printk(KERN_INFO "do_fcntl : F_GET_RW_HINT\n");
 		err = fcntl_get_rw_hint(filp, cmd, arg);
 		break;
 	case F_SET_RW_HINT:
+		printk(KERN_INFO "do_fcntl : F_SET_RW_HINT\n");
 		err = fcntl_set_rw_hint(filp, cmd, arg);
 		break;
 	default:

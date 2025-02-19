@@ -2800,7 +2800,7 @@ nvme_fc_queue_rq(struct blk_mq_hw_ctx *hctx,
 	if (ctrl->rport->remoteport.port_state != FC_OBJSTATE_ONLINE ||
 	    !nvme_check_ready(&queue->ctrl->ctrl, rq, queue_ready))
 		return nvme_fail_nonready_command(&queue->ctrl->ctrl, rq);
-
+	// printk(KERN_INFO "nvme_fc_queue_rq : nvme_setup_cmd rq->write_hint %d\n", rq->write_hint);
 	ret = nvme_setup_cmd(ns, rq);
 	if (ret)
 		return ret;
