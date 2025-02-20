@@ -933,6 +933,16 @@ static inline blk_status_t nvme_setup_write_zeroes(struct nvme_ns *ns,
 	return BLK_STS_OK;
 }
 
+static inline void nvme_assign_placement_id(struct nvme_ns *ns,
+	                struct request *req,
+	                struct nvme_command *cmd)
+{
+	enum rw_hint h = umin(ns->head->nr_plids - 1, req->write_hint);
+
+	cmd->rw.control |= cpu_to_le16(NVME_RW_DTYPE_DPLCMT);
+	cmd->rw.dsmgmt |= cpu_to_le32(ns->head->plids[h] << 16);
+}
+
 static inline blk_status_t nvme_setup_rw(struct nvme_ns *ns,
 		struct request *req, struct nvme_command *cmnd,
 		enum nvme_opcode op)
@@ -959,7 +969,7 @@ static inline blk_status_t nvme_setup_rw(struct nvme_ns *ns,
 			control |= NVME_RW_DTYPE_DPLCMT;
 		}
 	}
-	// printk(KERN_INFO "nvme_setup_rw: op=%d req->write_hint=%d\n", op, req->write_hint);
+	/* (EXPLAIN) Setup nvme command */
 
 	cmnd->rw.opcode = op;
 	cmnd->rw.flags = 0;
@@ -1062,6 +1072,9 @@ blk_status_t nvme_setup_cmd(struct nvme_ns *ns, struct request *req)
 		break;
 	case REQ_OP_WRITE:
 		ret = nvme_setup_rw(ns, req, cmd, nvme_cmd_write);
+		/* (EXPLAIN) FDP support, checks if namespace has placement IDs (nr_plids > 0) */
+		if (!ret && ns->head->nr_plids)
+			nvme_assign_placement_id(ns, req, cmd);
 		break;
 	case REQ_OP_ZONE_APPEND:
 		ret = nvme_setup_rw(ns, req, cmd, nvme_cmd_zone_append);
@@ -2436,6 +2449,13 @@ static int nvme_update_ns_info_block(struct nvme_ns *ns,
 		ret = blk_revalidate_disk_zones(ns->disk);
 		if (ret && !nvme_first_scan(ns->disk))
 			goto out;
+	}
+
+	if (ns->ctrl->ctratt & NVME_CTRL_ATTR_FDPS) {
+		ret = nvme_fetch_fdp_plids(ns, info->nsid);
+		if (ret)
+			dev_warn(ns->ctrl->device,
+				"FDP failure status:0x%x\n", ret);
 	}
 
 	ret = 0;

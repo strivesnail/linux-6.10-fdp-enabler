@@ -4716,7 +4716,7 @@ static void f2fs_dio_write_submit_io(const struct iomap_iter *iter,
 	enum temp_type temp = f2fs_get_segment_temp(seg_type);
 
 	bio->bi_write_hint = f2fs_io_type_to_rw_hint(sbi, DATA, temp);
-	printk(KERN_INFO "f2fs_dio_write_submit_io : temp %llu bio->bi_write_hint %llu seg_type %d\n", temp, bio->bi_write_hint, f2fs_rw_hint_to_seg_type);
+	/* (EXPLAIN) Prepare and submit a block I/O request with appropriate hints for flash storage optimization */
 	submit_bio(bio);
 }
 

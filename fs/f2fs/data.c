@@ -467,7 +467,7 @@ static struct bio *__bio_alloc(struct f2fs_io_info *fio, int npages)
 		bio->bi_private = sbi;
 		bio->bi_write_hint = f2fs_io_type_to_rw_hint(sbi,
 						fio->type, fio->temp);
-		printk(KERN_INFO "__bio_alloc : bio->bi_write_hint %llu\n", bio->bi_write_hint);
+		/* (EXPLAIN) Allocates and initializes a bio structure for I/O operations. */
 	}
 	iostat_alloc_and_bind_ctx(sbi, bio, NULL);
 
@@ -4186,7 +4186,7 @@ static int f2fs_iomap_begin(struct inode *inode, loff_t offset, loff_t length,
 	map.m_next_pgofs = &next_pgofs;
 	map.m_seg_type = f2fs_rw_hint_to_seg_type(F2FS_I_SB(inode),
 						inode->i_write_hint);
-	printk(KERN_INFO "f2fs_iomap_begin : inode->i_write_hint %llu\n", inode->i_write_hint);
+	// printk(KERN_INFO "(extra)f2fs_iomap_begin : inode->i_write_hint %llu\n", inode->i_write_hint);
 	if (flags & IOMAP_WRITE)
 		map.m_may_create = true;
 
