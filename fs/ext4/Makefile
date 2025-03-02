@@ -4,6 +4,7 @@
 #
 
 obj-$(CONFIG_EXT4_FS) += ext4.o
+obj-$(CONFIG_EXT4_FS) += block_life_cycle_tracking.o
 
 ext4-y	:= balloc.o bitmap.o block_validity.o dir.o ext4_jbd2.o extents.o \
 		extents_status.o file.o fsmap.o fsync.o hash.o ialloc.o \
