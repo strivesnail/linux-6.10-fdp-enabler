@@ -2786,7 +2786,7 @@ static inline int ext4_track_block_lifecycle(struct inode *inode, unsigned long 
 				death_diff = atomic64_read(&stats->deaths) - atomic64_read(&stats->previous_death);
 				if (death_diff > atomic64_read(&stats->initial_alive)) {
 					s64 death_distance = current_logical_clock - atomic64_read(&stats->first_timestamp);
-					pr_info("BLC: Finode %lu death distance = %lld LCU, new alive = %lld\n", inode->i_ino, death_distance, alive);
+					pr_info("BLC: Finode %lu death distance = %lld, new alive = %lld, lt %llu\n", inode->i_ino, death_distance, alive, atomic64_read(&global_logical_clock));
 
 					/** Reset tracking for next cycle */
 					atomic64_set(&stats->previous_death, atomic64_read(&stats->deaths));
@@ -2858,9 +2858,8 @@ static inline int ext4_track_block_lifecycle(struct inode *inode, unsigned long 
                         s64 death_distance = current_logical_clock - 
                                              atomic64_read(&parent_stats->first_timestamp);
                         
-                        // if (i == 0 || i == count-1)
-                        //     pr_info("BLC: Dinode %lu death distance = %lld LCU, new alive = %lld\n", 
-                        //             parent_inode->i_ino, death_distance, alive);
+						pr_info("BLC: Dinode %lu death distance = %lld LCU, new alive = %lld, lt %llu\n", 
+								parent_inode->i_ino, death_distance, alive, atomic64_read(&global_logical_clock));
                         
                         atomic64_set(&parent_stats->previous_death, atomic64_read(&parent_stats->deaths));
                         atomic64_set(&parent_stats->first_timestamp, current_logical_clock);
