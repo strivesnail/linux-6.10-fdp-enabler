@@ -4202,6 +4202,12 @@ int ext4_ext_map_blocks(handle_t *handle, struct inode *inode,
 				if (allocated > map->m_len)
 					allocated = map->m_len;
 				map->m_len = allocated;
+
+				/* If extent is initialized (not unwritten), use existing mapping) */
+				if (ext4_track_block_lifecycle(inode, map->m_len, EXT4_BLOCK_BIRTH | EXT4_BLOCK_DEATH)) {
+					pr_info("ext4: using existing mapping for inode %lu, ex [%d/%d/%llu] (initialized)\n", inode->i_ino, ee_block, ee_len, ee_start);
+				}
+
 				ext4_ext_show_leaf(inode, path);
 				goto out;
 			}
@@ -4211,8 +4217,13 @@ int ext4_ext_map_blocks(handle_t *handle, struct inode *inode,
 				allocated, newblock);
 			if (ret < 0)
 				err = ret;
-			else
+			else{
 				allocated = ret;
+
+				if (ext4_track_block_lifecycle(inode, allocated, EXT4_BLOCK_BIRTH | EXT4_BLOCK_DEATH)) {
+					pr_info("ext4: using existing mapping for inode %lu, ex [%d/%d/%llu] (unwritten)\n", inode->i_ino, ee_block, ee_len, ee_start);
+				}
+			}
 			goto out;
 		}
 	}
@@ -4245,6 +4256,11 @@ int ext4_ext_map_blocks(handle_t *handle, struct inode *inode,
 	    get_implied_cluster_alloc(inode->i_sb, map, ex, path)) {
 		ar.len = allocated = map->m_len;
 		newblock = map->m_pblk;
+
+		/* Through cluster allocation */
+		if (ext4_track_block_lifecycle(inode, map->m_len, EXT4_BLOCK_BIRTH)) {
+			pr_info("ext4: using existing mapping for inode %lu, ex [%d/%d/%llu] (cluster)\n", inode->i_ino, le32_to_cpu(ex->ee_block), ext4_ext_get_actual_len(ex), ext4_ext_pblock(ex));
+		}
 		goto got_allocated_blocks;
 	}
 
@@ -4264,6 +4280,8 @@ int ext4_ext_map_blocks(handle_t *handle, struct inode *inode,
 	    get_implied_cluster_alloc(inode->i_sb, map, &ex2, path)) {
 		ar.len = allocated = map->m_len;
 		newblock = map->m_pblk;
+
+		// printk(KERN_INFO "ext4: allocated size through cluster: %u blocks\n", allocated);
 		goto got_allocated_blocks;
 	}
 
@@ -4324,6 +4342,11 @@ int ext4_ext_map_blocks(handle_t *handle, struct inode *inode,
 		  ar.goal, newblock, ar.len, allocated);
 	if (ar.len > allocated)
 		ar.len = allocated;
+
+	/** Successfully allocated physical blocks */
+	if (ext4_track_block_lifecycle(inode, allocated, EXT4_BLOCK_BIRTH)) {
+		pr_info("ext4: allocated %u blocks for inode %lu, ex [%d/%d/%llu]\n", allocated, inode->i_ino, le32_to_cpu(newex.ee_block), le16_to_cpu(newex.ee_len));
+	}
 
 got_allocated_blocks:
 	/* try to insert new extent into found leaf and return */
