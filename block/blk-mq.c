@@ -2634,6 +2634,10 @@ static void blk_mq_try_issue_directly(struct blk_mq_hw_ctx *hctx,
 		return;
 	}
 
+	/**
+	 * Try to issue request directly to device driver
+	 * For NVMe, this would call nvme_queue_rq
+	 */
 	ret = __blk_mq_issue_directly(hctx, rq, true);
 	switch (ret) {
 	case BLK_STS_OK:
@@ -3026,6 +3030,10 @@ new_request:
 		blk_mq_insert_request(rq, 0);
 		blk_mq_run_hw_queue(hctx, true);
 	} else {
+		/**
+		 * This will lead to the NVMe driver's dispatch function. 
+		 * In NVMe, the dispatch operation would be nvme_queue_rq
+		 */
 		blk_mq_run_dispatch_ops(q, blk_mq_try_issue_directly(hctx, rq));
 	}
 	return;

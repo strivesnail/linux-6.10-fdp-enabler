@@ -958,6 +958,8 @@ struct inode *__ext4_new_inode(struct mnt_idmap *idmap,
 	inode = new_inode(sb);
 	if (!inode)
 		return ERR_PTR(-ENOMEM);
+
+	// inode->i_write_hint = WRITE_LIFE_MEDIUM;
 	ei = EXT4_I(inode);
 
 	/*

@@ -4720,6 +4720,7 @@ static void f2fs_dio_write_submit_io(const struct iomap_iter *iter,
 	submit_bio(bio);
 }
 
+/** (EXPLAIN) Main function to submit the block I/O and passes the hint info */
 static const struct iomap_dio_ops f2fs_iomap_dio_write_ops = {
 	.end_io		= f2fs_dio_write_end_io,
 	.submit_io	= f2fs_dio_write_submit_io,
@@ -4738,6 +4739,9 @@ static void f2fs_flush_buffered_write(struct address_space *mapping,
 				 end_pos >> PAGE_SHIFT);
 }
 
+/**  (EXPLAIN) called first when a direct I/O write operation is initiated
+ * This function serves as the entry point for direct I/O writes
+ * */
 static ssize_t f2fs_dio_write_iter(struct kiocb *iocb, struct iov_iter *from,
 				   bool *may_need_sync)
 {

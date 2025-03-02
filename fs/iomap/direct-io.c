@@ -656,6 +656,11 @@ __iomap_dio_rw(struct kiocb *iocb, struct iov_iter *iter,
 	inode_dio_begin(inode);
 
 	blk_start_plug(&plug);
+	/**
+	 * Here ops is f2fs_iomap_ops/ext4_iomap_ops which contains f2fs_iomap_begin/ext4_iomap_begin
+	 * After getting the physical block mapping through f2fs_iomap_begin, it calls iomap_dio_iter(&iomi, dio)
+	 * iomap_dio_iter is where the bio gets allocated and set up (through __bio_alloc)
+	 */
 	while ((ret = iomap_iter(&iomi, ops)) > 0) {
 		iomi.processed = iomap_dio_iter(&iomi, dio);
 
