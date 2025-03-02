@@ -3266,6 +3266,13 @@ int __ext4_unlink(struct inode *dir, const struct qstr *d_name,
 		goto out_bh;
 	}
 
+	if (ext4_track_block_lifecycle(d_inode(dentry), d_inode(dentry)->i_blocks >> (dir->i_sb->s_blocksize_bits - 9), 
+                              EXT4_BLOCK_DEATH)) {
+		pr_info("Unlink: parent dir ino %lu tracking deletion of inode %lu with %llu blocks\n",
+				dir->i_ino, d_inode(dentry)->i_ino, 
+				d_inode(dentry)->i_blocks >> (dir->i_sb->s_blocksize_bits - 9));
+	}
+
 	if (IS_DIRSYNC(dir))
 		ext4_handle_sync(handle);
 
