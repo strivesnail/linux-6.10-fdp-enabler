@@ -1260,19 +1260,16 @@ got:
 	ei->i_disksize = 0;
 
 	
-	EXT4_I(inode)->i_blk_lc_stats = NULL;
 	EXT4_I(inode)->i_enable_track = 0;
-	pr_info("Dir %lu is created, dir stats is %p, enable track is %d\n", dir->i_ino, (void*)EXT4_I(dir)->i_blk_lc_stats, EXT4_I(dir)->i_enable_track);
-	if (EXT4_I(dir)->i_blk_lc_stats && EXT4_I(dir)->i_enable_track) {
-		pr_info("Inode %lu is created in directory %lu (%s)\n", inode->i_ino, dir->i_ino, qstr->name);
-			
-		EXT4_I(inode)->i_blk_lc_stats = kmalloc(sizeof(struct block_lifecycle_stats), GFP_KERNEL);
-		if (EXT4_I(inode)->i_blk_lc_stats) {
-			pr_info("Inode %lu is initializing to 0\n", inode->i_ino);
-			atomic64_set(&EXT4_I(inode)->i_blk_lc_stats->births, 0);
-			atomic64_set(&EXT4_I(inode)->i_blk_lc_stats->deaths, 0);
-			atomic_set(&EXT4_I(inode)->i_blk_lc_stats->tracking_started, 1);
-			atomic64_set(&EXT4_I(inode)->i_blk_lc_stats->first_timestamp, atomic64_read(&global_logical_clock));
+	// pr_info("Dir %lu is created, enable track is %d\n", dir->i_ino, EXT4_I(dir)->i_enable_track);
+	if (EXT4_I(dir)->i_enable_track) {
+		// pr_info("Inode %lu is created in directory %lu (%s)\n", inode->i_ino, dir->i_ino, qstr->name);
+		if (!EXT4_I(inode)->i_enable_track) {
+			// pr_info("Inode %lu is initializing to 0\n", inode->i_ino);
+			atomic64_set(&EXT4_I(inode)->i_blk_lc_stats.births, 0);
+			atomic64_set(&EXT4_I(inode)->i_blk_lc_stats.deaths, 0);
+			atomic_set(&EXT4_I(inode)->i_blk_lc_stats.tracking_started, 1);
+			atomic64_set(&EXT4_I(inode)->i_blk_lc_stats.first_timestamp, atomic64_read(&global_logical_clock));
 			EXT4_I(inode)->i_enable_track = 1;
 		}
 	} 

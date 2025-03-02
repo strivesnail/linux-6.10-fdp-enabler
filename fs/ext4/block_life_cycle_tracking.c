@@ -86,25 +86,21 @@ static u64 ext4_calculate_dir_blocks(struct inode *dir)
 /* Enable tracking for a single inode */
 int ext4_enable_tracking_single(struct inode *inode)
 {
-    struct block_lifecycle_stats *stats;
+    struct block_lifecycle_stats* stats;
     u64 existing_blocks;
     
     /* Check if already tracked */
-    if (EXT4_I(inode)->i_blk_lc_stats) {
+    if (EXT4_I(inode)->i_enable_track) {
         pr_info("EXT4-Track: Inode %lu already tracked births %llu deaths %llu \n", 
             inode->i_ino, 
-            atomic64_read(&EXT4_I(inode)->i_blk_lc_stats->births), 
-            atomic64_read(&EXT4_I(inode)->i_blk_lc_stats->deaths));
+            atomic64_read(&EXT4_I(inode)->i_blk_lc_stats.births), 
+            atomic64_read(&EXT4_I(inode)->i_blk_lc_stats.deaths));
         return 0;
     }
 
     /* Use GFP_NOFS to avoid potential deadlocks during filesystem operations */
-    stats = kmalloc(sizeof(struct block_lifecycle_stats), GFP_NOFS);
-    if (!stats) {
-        pr_err("EXT4-Track: Failed to allocate stats for inode %lu\n",
-               inode->i_ino);
-        return -ENOMEM;
-    }
+    stats = &EXT4_I(inode)->i_blk_lc_stats;
+    
 
     // existing_blocks = inode->i_blocks >> (inode->i_sb->s_blocksize_bits - 9);
 
@@ -128,13 +124,10 @@ int ext4_enable_tracking_single(struct inode *inode)
     atomic64_set(&stats->initial_alive, existing_blocks);
     atomic_set(&stats->tracking_started, 1);
 
-    /* Assign stats to inode, use a memory barrier to ensure proper assignment */
-    smp_mb();
-    EXT4_I(inode)->i_blk_lc_stats = stats;
     EXT4_I(inode)->i_enable_track = 1;
 
     /* Mark inode as dirty */
-    __mark_inode_dirty(inode, I_DIRTY_SYNC | I_DIRTY_DATASYNC);
+    // __mark_inode_dirty(inode, I_DIRTY_SYNC | I_DIRTY_DATASYNC);
 
     return 0;
 }
@@ -142,6 +135,7 @@ int ext4_enable_tracking_single(struct inode *inode)
 /* Disable tracking for a single inode */
 int ext4_disable_tracking_single(struct inode *inode)
 {
+    struct block_lifecycle_stats* stats;
     if (!inode)
         return -EINVAL;
 
@@ -149,16 +143,25 @@ int ext4_disable_tracking_single(struct inode *inode)
             inode->i_ino, inode->i_mode);
 
     /* Check if already not tracked */
-    if (!EXT4_I(inode)->i_blk_lc_stats)
+    if (!EXT4_I(inode)->i_enable_track)
         return 0;
 
-    /* Free stats and clear pointer */
-    kfree(EXT4_I(inode)->i_blk_lc_stats);
-    EXT4_I(inode)->i_blk_lc_stats = NULL;
+    stats = &EXT4_I(inode)->i_blk_lc_stats;
+
+    /* Initialize atomic counters */
+    atomic64_set(&stats->births, 0);
+    atomic64_set(&stats->deaths, 0);
+    atomic64_set(&stats->logical_clock, 0);
+    atomic64_set(&stats->previous_death, 0);
+    atomic64_set(&stats->first_timestamp, atomic64_read(&global_logical_clock));
+    atomic64_set(&stats->initial_alive, 0);
+    atomic_set(&stats->tracking_started, 0);
+
+
     EXT4_I(inode)->i_enable_track = 0;
 
     /* Mark inode as dirty */
-    __mark_inode_dirty(inode, I_DIRTY_SYNC | I_DIRTY_DATASYNC);
+    // __mark_inode_dirty(inode, I_DIRTY_SYNC | I_DIRTY_DATASYNC);
 
     return 0;
 }

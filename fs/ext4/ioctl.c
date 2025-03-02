@@ -1090,9 +1090,9 @@ static int ext4_ioctl_config_block_tracking(struct super_block *sb, struct inode
 		cmd_to_usr.inode = inode->i_ino;
 		cmd_to_usr.enable = cmd.enable;
 
-		if (ei->i_blk_lc_stats) {
-			cmd_to_usr.births = atomic64_read(&ei->i_blk_lc_stats->births);
-			cmd_to_usr.deaths = atomic64_read(&ei->i_blk_lc_stats->deaths);
+		if (ei->i_enable_track) {
+			cmd_to_usr.births = atomic64_read(&ei->i_blk_lc_stats.births);
+			cmd_to_usr.deaths = atomic64_read(&ei->i_blk_lc_stats.deaths);
 		}
 
 		inode_unlock(inode);

@@ -536,9 +536,9 @@ int ext4_map_blocks(handle_t *handle, struct inode *inode,
 		/* Add counter here for existing mapping from extent status */ 
 		if ((map->m_flags & EXT4_MAP_MAPPED) &&
         ext4_track_block_lifecycle(inode, map->m_len, EXT4_BLOCK_BIRTH | EXT4_BLOCK_DEATH)) {
-			pr_info("Write request for inode %lu, ex [%d/%d/%llu/%x]\n",
-					inode->i_ino, map->m_lblk, map->m_len, map->m_pblk,
-					map->m_flags);
+			// pr_info("Write request for inode %lu, ex [%d/%d/%llu/%x]\n",
+			// 		inode->i_ino, map->m_lblk, map->m_len, map->m_pblk,
+			// 		map->m_flags);
 		}
 		goto found;
 	}
@@ -4269,11 +4269,15 @@ static int ext4_fill_raw_inode(struct inode *inode, struct ext4_inode *raw_inode
 	raw_inode->i_links_count = cpu_to_le16(inode->i_nlink);
 
 	/* Update block allocation counters */
-	if (ei->i_enable_track && ei->i_blk_lc_stats) {
-		raw_inode->i_enable_track = cpu_to_le32(1);
-		raw_inode->i_block_births = cpu_to_le64(atomic64_read(&ei->i_blk_lc_stats->births));
-		raw_inode->i_block_deaths = cpu_to_le64(atomic64_read(&ei->i_blk_lc_stats->deaths));
-	}
+	// if (ei->i_enable_track) {
+	// 	raw_inode->i_enable_track = cpu_to_le32(1);
+	// 	raw_inode->i_block_births = cpu_to_le64(atomic64_read(&ei->i_blk_lc_stats.births));
+	// 	raw_inode->i_block_deaths = cpu_to_le64(atomic64_read(&ei->i_blk_lc_stats.deaths));
+	// } else {
+	// 	raw_inode->i_enable_track = cpu_to_le32(0);
+	// 	raw_inode->i_block_births = cpu_to_le64(0);
+	// 	raw_inode->i_block_deaths = cpu_to_le64(0);
+	// }
 
 	EXT4_INODE_SET_CTIME(inode, raw_inode);
 	EXT4_INODE_SET_MTIME(inode, raw_inode);
@@ -4736,21 +4740,21 @@ struct inode *__ext4_iget(struct super_block *sb, unsigned long ino,
 		ei->i_extra_isize = 0;
 
 	// If these fields are only present in extended inodes
-	if (EXT4_INODE_SIZE(sb) > EXT4_GOOD_OLD_INODE_SIZE) {
-		if (le32_to_cpu(raw_inode->i_enable_track)) {
-			ei->i_enable_track = 1;
-			if (!ei->i_blk_lc_stats) {
-				ei->i_blk_lc_stats = kzalloc(sizeof(*ei->i_blk_lc_stats),
-							      GFP_KERNEL);
-				if (!ei->i_blk_lc_stats) {
-					ret = -ENOMEM;
-					goto bad_inode;
-				}
-			}
-			atomic64_set(&ei->i_blk_lc_stats->births, le64_to_cpu(raw_inode->i_block_births));
-			atomic64_set(&ei->i_blk_lc_stats->deaths, le64_to_cpu(raw_inode->i_block_deaths));
-		}
-	}
+	// if (EXT4_INODE_SIZE(sb) > EXT4_GOOD_OLD_INODE_SIZE) {
+	// 	if (le32_to_cpu(raw_inode->i_enable_track)) {
+	// 		ei->i_enable_track = 1;
+	// 		if (!ei->i_blk_lc_stats) {
+	// 			ei->i_blk_lc_stats = kzalloc(sizeof(*ei->i_blk_lc_stats),
+	// 						      GFP_KERNEL);
+	// 			if (!ei->i_blk_lc_stats) {
+	// 				ret = -ENOMEM;
+	// 				goto bad_inode;
+	// 			}
+	// 		}
+	// 		atomic64_set(&ei->i_blk_lc_stats->births, le64_to_cpu(raw_inode->i_block_births));
+	// 		atomic64_set(&ei->i_blk_lc_stats->deaths, le64_to_cpu(raw_inode->i_block_deaths));
+	// 	}
+	// }
 
 	/* Precompute checksum seed for inode metadata */
 	if (ext4_has_metadata_csum(sb)) {
