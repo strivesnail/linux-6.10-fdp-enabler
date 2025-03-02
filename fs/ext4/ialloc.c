@@ -1271,6 +1271,8 @@ got:
 			pr_info("Inode %lu is initializing to 0\n", inode->i_ino);
 			atomic64_set(&EXT4_I(inode)->i_blk_lc_stats->births, 0);
 			atomic64_set(&EXT4_I(inode)->i_blk_lc_stats->deaths, 0);
+			atomic_set(&EXT4_I(inode)->i_blk_lc_stats->tracking_started, 1);
+			atomic64_set(&EXT4_I(inode)->i_blk_lc_stats->first_timestamp, atomic64_read(&global_logical_clock));
 			EXT4_I(inode)->i_enable_track = 1;
 		}
 	} 

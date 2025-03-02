@@ -777,14 +777,6 @@ struct block_lifecycle_stats {
     atomic_t tracking_started;
 };
 
-/* Structure for the tracking command */
-struct ext4_block_track_cmd {
-    __u32 inode;        /* Inode number to track */
-    __u8 enable;        /* 2 to view status, 1 to enable tracking, 0 to disable */
-	__u64 births;
-	__u64 deaths;
-};
-
 /*
  * Structure of an inode on the disk
  */
@@ -2736,163 +2728,163 @@ struct mmpd_data {
 
  extern atomic64_t global_logical_clock;
 
- static inline int ext4_track_block_lifecycle(struct inode *inode, unsigned long count, uint8_t bits) {
- 
-	 if (!EXT4_I(inode)->i_blk_lc_stats || !EXT4_I(inode)->i_enable_track)  /* Not tracking this inode */
-		 return 0;
- 
-	 struct block_lifecycle_stats *stats = EXT4_I(inode)->i_blk_lc_stats;
-	 
-	 s64 current_logical_clock = 0;
-	 int i;
-	 
-	 if (bits & EXT4_BLOCK_BIRTH) {
-		 
-		 for (i = 0; i < count; i++)
-		 {
-			 atomic64_add(1, &stats->births);
-			 current_logical_clock = atomic64_inc_return(&global_logical_clock);
-			 pr_info("Current global logical clock is %llu (inode: %lu) | Births: %lld\n", current_logical_clock, inode->i_ino, atomic64_read(&stats->births));
-		 }
-	 }
- 
-	 if (bits & EXT4_BLOCK_DEATH) {
-		 
-		 for (i = 0; i < count; i++)
-		 {
-			 atomic64_add(1, &stats->deaths);
-			 current_logical_clock = atomic64_inc_return(&global_logical_clock);
-			 pr_info("Current global logical clock is %llu (inode: %lu) | Deaths: %lld\n", current_logical_clock, inode->i_ino, atomic64_read(&stats->deaths));
-		 
-			 s64 alive = atomic64_read(&stats->births) - atomic64_read(&stats->deaths);
-			 if (alive < 0) alive = 0;
- 
-			 // Check if we should start tracking
-			 if (!atomic_read(&stats->tracking_started)) {
-				 if (alive >= 0)
-				 {
-					 atomic_set(&stats->tracking_started, 1);
-					 atomic64_set(&stats->previous_death, atomic64_read(&stats->deaths));
-					 atomic64_set(&stats->first_timestamp, current_logical_clock);
-					 atomic64_set(&stats->initial_alive, alive);
-					 pr_info("BLC: Finode %lu starts tracking with alive = %lld\n", 
-						 inode->i_ino, alive);
-				 }
-			 }
- 
-			 // Check if death threshold exceeded
-			 if (atomic_read(&stats->tracking_started)) {
-				 s64 death_diff = atomic64_read(&stats->deaths) - 
-							 atomic64_read(&stats->previous_death);
- 
-				 if (death_diff > atomic64_read(&stats->initial_alive)) {
-					 
-					 // Calculate death distance
-					 s64 death_distance = current_logical_clock - 
-									 atomic64_read(&stats->first_timestamp);
- 
-					 pr_info("BLC: Finode %lu death distance = %lld LCU, new alive = %lld\n", inode->i_ino, death_distance, alive);
- 
-					 // Reset tracking for next cycle
-					 atomic64_set(&stats->previous_death, atomic64_read(&stats->deaths));
-					 atomic64_set(&stats->first_timestamp, current_logical_clock);
-					 atomic64_set(&stats->initial_alive, alive);
-				 }
-			 }
-		 }
-	 }
- 
-	 struct dentry *cur_dentry;
-	 struct dentry *parent_dentry;
-	 struct inode *parent_inode;
-  
-	 cur_dentry = d_find_any_alias(inode);
-	 if (!cur_dentry)
-		 return 1;
-  
-	 while (1) {
-		 parent_dentry = cur_dentry->d_parent;
-		 if (parent_dentry == cur_dentry) {
-			 dput(cur_dentry);
-			 break;
-		 }
+static inline int ext4_track_block_lifecycle(struct inode *inode, unsigned long count, uint8_t bits) {
+	struct block_lifecycle_stats *stats;
+	s64 current_logical_clock = 0;
+    s64 alive, death_diff;
+	int i;
+
+	struct dentry *parent_dentry;
+	struct inode *parent_inode;
+	struct block_lifecycle_stats *parent_stats;
+	struct dentry *cur_dentry;
+
+	if (!EXT4_I(inode)->i_blk_lc_stats || !EXT4_I(inode)->i_enable_track)  /* Not tracking this inode */
+		return 0;
+
+	stats = EXT4_I(inode)->i_blk_lc_stats;
+	
+	for (i = 0; i < count; i++) {
+		if (bits & EXT4_BLOCK_BIRTH) {
+			atomic64_add(1, &stats->births);
+			current_logical_clock = atomic64_inc_return(&global_logical_clock);
+
+			/* Log every birth with lower log level to reduce verbosity */
+            if (i == 0 || i == count-1) /* Log only first and last for large batches */
+                pr_info("Global logical clock: %lld (inode: %lu) | Births: %lld [%d/%lu]\n", 
+                        current_logical_clock, inode->i_ino, 
+                        atomic64_read(&stats->births), i+1, count);
+		}
+
+		if (bits & EXT4_BLOCK_DEATH) {
+			atomic64_add(1, &stats->deaths);
+			current_logical_clock = atomic64_inc_return(&global_logical_clock);
 			
-		 parent_inode = parent_dentry->d_inode;
-		 if (!parent_inode || !S_ISDIR(parent_inode->i_mode)) {
-			 dput(cur_dentry);
-			 break;
-		 }
- 
-		 if (!EXT4_I(parent_inode)->i_blk_lc_stats || !EXT4_I(parent_inode)->i_enable_track) {
-			 dput(cur_dentry);
-			 break;
-		 }
- 
-		 stats = EXT4_I(parent_inode)->i_blk_lc_stats;
-		 
-		 // Increment logical clock for parent directory too
-		 // Only increment logical clock when necessary
- 
-		 pr_info("Current global logical clock is %llu (inode: %lu) | Births: %lld | Deaths: %lld\n", current_logical_clock, parent_inode->i_ino, atomic64_read(&stats->births), atomic64_read(&stats->deaths));
- 
-		 if (bits & EXT4_BLOCK_BIRTH) {
-			 for (i = 0; i < count; i++)
-			 {
-				 atomic64_add(1, &stats->births);
-			 }
-		 }
-	 
-		 if (bits & EXT4_BLOCK_DEATH) {
-			 for (i = 0; i < count; i++)
-			 {
-				 atomic64_add(1, &stats->deaths);
- 
-				 s64 alive = atomic64_read(&stats->births) - atomic64_read(&stats->deaths);
-				 if (alive < 0) alive = 0;
- 
-				 if (!atomic_read(&stats->tracking_started)) {
-					 if (alive >= 0)
-					 {
-						 atomic_set(&stats->tracking_started, 1);
-						 atomic64_set(&stats->previous_death, atomic64_read(&stats->deaths));
-						 atomic64_set(&stats->first_timestamp, current_logical_clock);
-						 atomic64_set(&stats->initial_alive, alive);
-						 pr_info("BLC: Dinode %lu starts tracking with alive = %lld\n",
-							 parent_inode->i_ino, alive);
-					 }
-				 }
- 
-				 if (atomic_read(&stats->tracking_started)) {
-					 s64 death_diff = atomic64_read(&stats->deaths) - 
-									 atomic64_read(&stats->previous_death);
-					 // s64 prev_alive = atomic64_read(&stats->births) - 
-					 //                 atomic64_read(&stats->previous_death);
- 
-					 if (death_diff > atomic64_read(&stats->initial_alive)) {
-						 s64 death_distance = current_logical_clock -
-										 atomic64_read(&stats->first_timestamp);
- 
-						 pr_info("BLC: Dinode %lu death distance = %lld LCU, new alive = %lld\n", parent_inode->i_ino, death_distance, alive);
- 
-						 atomic64_set(&stats->previous_death, atomic64_read(&stats->deaths));
-						 atomic64_set(&stats->first_timestamp, current_logical_clock);
-						 atomic64_set(&stats->initial_alive, alive);
-					 }
-				 }
-			 }
-		 }
-  
-		 dput(cur_dentry);
-		 cur_dentry = d_find_any_alias(parent_inode);
-		 if (!cur_dentry)
-			 break;
-	 }
- 
-	 return 1;
+			/* Log every death with lower log level */
+            if (i == 0 || i == count-1) /* Log only first and last for large batches */
+                pr_info("Global logical clock: %lld (inode: %lu) | Deaths: %lld [%d/%lu]\n", 
+                        current_logical_clock, inode->i_ino, 
+                        atomic64_read(&stats->deaths), i+1, count);
+		
+			alive = atomic64_read(&stats->births) - atomic64_read(&stats->deaths);
+			if (alive < 0) {
+				alive = 0;
+				pr_info("ERROR: Negative alive count detected for inode %lu\n", inode->i_ino);
+			}
+
+			// Check if we should start tracking (Only for directories??)
+			if (!atomic_read(&stats->tracking_started) && alive >= 0) {
+				atomic_set(&stats->tracking_started, 1);
+				atomic64_set(&stats->previous_death, atomic64_read(&stats->deaths));
+				atomic64_set(&stats->first_timestamp, current_logical_clock);
+				/** initial_alive will never change after the first initialization */
+				atomic64_set(&stats->initial_alive, alive); 
+				pr_info("BLC: Finode %lu starts tracking with alive = %lld\n", inode->i_ino, alive);
+			}
+
+			if (atomic_read(&stats->tracking_started)) {
+				death_diff = atomic64_read(&stats->deaths) - atomic64_read(&stats->previous_death);
+				if (death_diff > atomic64_read(&stats->initial_alive)) {
+					s64 death_distance = current_logical_clock - atomic64_read(&stats->first_timestamp);
+					pr_info("BLC: Finode %lu death distance = %lld LCU, new alive = %lld\n", inode->i_ino, death_distance, alive);
+
+					/** Reset tracking for next cycle */
+					atomic64_set(&stats->previous_death, atomic64_read(&stats->deaths));
+					atomic64_set(&stats->first_timestamp, current_logical_clock);
+					atomic64_set(&stats->initial_alive, alive);
+				}
+			}
+		}
+
+		/** Propagate to parent directories for each block */
+		cur_dentry = d_find_any_alias(inode);
+		if (!cur_dentry) continue;
+
+		while (1) {
+			parent_dentry = cur_dentry->d_parent;
+			if (parent_dentry == cur_dentry) {
+				dput(cur_dentry);
+				break;
+			}
+
+			parent_inode = parent_dentry->d_inode;
+            if (!parent_inode || !S_ISDIR(parent_inode->i_mode) || 
+                !EXT4_I(parent_inode)->i_blk_lc_stats || 
+                !EXT4_I(parent_inode)->i_enable_track) {
+                dput(cur_dentry);
+                break;
+            }
+			
+			parent_stats = EXT4_I(parent_inode)->i_blk_lc_stats;
+
+			/* Log parent info only for first and last blocks */
+            if (i == 0 || i == count-1)
+                pr_info("Parent dir: inode %lu | Births: %lld | Deaths: %lld\n", 
+                        parent_inode->i_ino, 
+                        atomic64_read(&parent_stats->births), 
+                        atomic64_read(&parent_stats->deaths));
+			
+			/* Update parent directory counters */
+            if (bits & EXT4_BLOCK_BIRTH) {
+                atomic64_add(1, &parent_stats->births);
+            }
+
+			if (bits & EXT4_BLOCK_DEATH) {
+				atomic64_add(1, &parent_stats->deaths);
+                
+                alive = atomic64_read(&parent_stats->births) - atomic64_read(&parent_stats->deaths);
+                if (alive < 0) {
+					alive = 0;
+					pr_info("ERROR: Negative alive count detected for p inode %lu\n", parent_inode->i_ino);
+				}
+
+				/* Initialize tracking for parent if needed */
+                if (!atomic_read(&parent_stats->tracking_started) && alive >= 0) {
+                    atomic_set(&parent_stats->tracking_started, 1);
+                    atomic64_set(&parent_stats->previous_death, atomic64_read(&parent_stats->deaths));
+                    atomic64_set(&parent_stats->first_timestamp, current_logical_clock);
+                    atomic64_set(&parent_stats->initial_alive, alive);
+                    
+                    if (i == 0 || i == count-1)
+                        pr_info("BLC: Dinode %lu starts tracking with alive = %lld\n",
+                                parent_inode->i_ino, alive);
+                }
+
+				/* Check if parent death threshold exceeded */
+                if (atomic_read(&parent_stats->tracking_started)) {
+                    death_diff = atomic64_read(&parent_stats->deaths) - 
+                                 atomic64_read(&parent_stats->previous_death);
+                    
+                    if (death_diff > atomic64_read(&parent_stats->initial_alive)) {
+                        s64 death_distance = current_logical_clock - 
+                                             atomic64_read(&parent_stats->first_timestamp);
+                        
+                        if (i == 0 || i == count-1)
+                            pr_info("BLC: Dinode %lu death distance = %lld LCU, new alive = %lld\n", 
+                                    parent_inode->i_ino, death_distance, alive);
+                        
+                        atomic64_set(&parent_stats->previous_death, atomic64_read(&parent_stats->deaths));
+                        atomic64_set(&parent_stats->first_timestamp, current_logical_clock);
+                        atomic64_set(&parent_stats->initial_alive, alive);
+                    }
+                }
+			}
+			/* Get next parent */
+            struct dentry *next_dentry = d_find_any_alias(parent_inode);
+            dput(cur_dentry);
+            
+            if (!next_dentry)
+                break;
+                
+            cur_dentry = next_dentry;
+		}
+	}
+
+	return 1;
  }
  
- int ext4_enable_tracking_single(handle_t *handle, struct inode *inode);
- int ext4_disable_tracking_single(handle_t *handle, struct inode *inode);
+ int ext4_enable_tracking_single(struct inode *inode);
+ int ext4_disable_tracking_single(struct inode *inode);
  
 
 /* bitmap.c */

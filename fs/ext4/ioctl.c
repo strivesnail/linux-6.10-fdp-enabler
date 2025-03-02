@@ -1057,6 +1057,55 @@ static int ext4_ioctl_get_es_cache(struct file *filp, unsigned long arg)
 	return error;
 }
 
+static int ext4_ioctl_config_block_tracking(struct super_block *sb, struct inode *inode, unsigned long arg)
+{
+	struct ext4_block_track_cmd cmd;
+	struct ext4_block_track_cmd cmd_to_usr;
+	struct ext4_inode_info *ei;
+	int err = 0;
+
+	if (!capable(CAP_SYS_ADMIN))
+		return -EPERM;
+
+	if (copy_from_user(&cmd, (struct ext4_block_track_cmd __user *)arg, sizeof(cmd)))
+		return -EFAULT;
+
+	// Validate command parameters
+	if (cmd.enable > 2)
+		return -EINVAL;
+
+	ei = EXT4_I(inode);
+
+	inode_lock(inode);
+
+	switch (cmd.enable) {
+	case 0: // Disable tracking
+		err = ext4_disable_tracking_single(inode);
+		break;
+	case 1: // Enable tracking
+		err = ext4_enable_tracking_single(inode);
+		break;
+	case 2: // View status
+		memset(&cmd_to_usr, 0, sizeof(cmd_to_usr));
+		cmd_to_usr.inode = inode->i_ino;
+		cmd_to_usr.enable = cmd.enable;
+
+		if (ei->i_blk_lc_stats) {
+			cmd_to_usr.births = atomic64_read(&ei->i_blk_lc_stats->births);
+			cmd_to_usr.deaths = atomic64_read(&ei->i_blk_lc_stats->deaths);
+		}
+
+		inode_unlock(inode);
+
+		if (copy_to_user((void __user *)arg, &cmd_to_usr, sizeof(cmd_to_usr)))
+			return -EFAULT;
+
+		return 0;
+	}
+	inode_unlock(inode);
+	return 0;
+}
+
 static int ext4_ioctl_checkpoint(struct file *filp, unsigned long arg)
 {
 	int err = 0;
@@ -1616,6 +1665,8 @@ resizefs_out:
 		return ext4_ioctl_getuuid(EXT4_SB(sb), (void __user *)arg);
 	case EXT4_IOC_SETFSUUID:
 		return ext4_ioctl_setuuid(filp, (const void __user *)arg);
+	case EXT4_IOC_CONFIG_BLOCK_TRACKING:
+		return ext4_ioctl_config_block_tracking(sb, inode, arg);
 	default:
 		return -ENOTTY;
 	}

@@ -34,6 +34,10 @@
 #define EXT4_IOC_GETFSUUID		_IOR('f', 44, struct fsuuid)
 #define EXT4_IOC_SETFSUUID		_IOW('f', 44, struct fsuuid)
 
+// Define the ioctl command for fetching block stats
+#define EXT4_IOC_CONFIG_BLOCK_TRACKING _IOWR('f', 45, struct ext4_block_track_cmd)
+
+
 #define EXT4_IOC_SHUTDOWN _IOR('X', 125, __u32)
 
 /*
@@ -68,6 +72,14 @@
 #define EXT4_IOC_CHECKPOINT_FLAG_VALID		(EXT4_IOC_CHECKPOINT_FLAG_DISCARD | \
 						EXT4_IOC_CHECKPOINT_FLAG_ZEROOUT | \
 						EXT4_IOC_CHECKPOINT_FLAG_DRY_RUN)
+
+/* Structure for the tracking command */
+struct ext4_block_track_cmd {
+    __u32 inode;        /* Inode number to track */
+    __u8  enable;       /* 2 to view status, 1 to enable tracking, 0 to disable */
+	__u64 births;
+	__u64 deaths;
+};
 
 /*
  * Structure for EXT4_IOC_GETFSUUID/EXT4_IOC_SETFSUUID
