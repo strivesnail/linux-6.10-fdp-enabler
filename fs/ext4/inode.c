@@ -536,9 +536,9 @@ int ext4_map_blocks(handle_t *handle, struct inode *inode,
 		/* Add counter here for existing mapping from extent status */ 
 		if ((map->m_flags & EXT4_MAP_MAPPED) &&
         ext4_track_block_lifecycle(inode, map->m_len, EXT4_BLOCK_BIRTH | EXT4_BLOCK_DEATH)) {
-			// pr_info("Write request for inode %lu, ex [%d/%d/%llu/%x]\n",
-			// 		inode->i_ino, map->m_lblk, map->m_len, map->m_pblk,
-			// 		map->m_flags);
+			pr_info("ext4_map_blocks: Write request for inode %lu, ex [%d/%d/%llu/%x]\n",
+					inode->i_ino, map->m_lblk, map->m_len, map->m_pblk,
+					map->m_flags);
 		}
 		goto found;
 	}

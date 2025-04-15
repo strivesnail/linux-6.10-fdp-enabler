@@ -105,7 +105,8 @@ int ext4_enable_tracking_single(struct inode *inode)
     // existing_blocks = inode->i_blocks >> (inode->i_sb->s_blocksize_bits - 9);
 
     if (S_ISDIR(inode->i_mode)) {
-        existing_blocks = ext4_calculate_dir_blocks(inode);
+        existing_blocks = 0;
+        // existing_blocks = ext4_calculate_dir_blocks(inode);
         // existing_blocks = ext4_calculate_dir_total_blocks(inode);
         pr_info("EXT4-Track: Initializing directory inode %lu with %llu total blocks\n",
                 inode->i_ino, existing_blocks);

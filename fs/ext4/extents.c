@@ -4205,7 +4205,7 @@ int ext4_ext_map_blocks(handle_t *handle, struct inode *inode,
 
 				/* If extent is initialized (not unwritten), use existing mapping) */
 				if (ext4_track_block_lifecycle(inode, map->m_len, EXT4_BLOCK_BIRTH | EXT4_BLOCK_DEATH)) {
-					// pr_info("ext4: using existing mapping for inode %lu, ex [%d/%d/%llu] (initialized)\n", inode->i_ino, ee_block, ee_len, ee_start);
+					pr_info("ext4_ext_map_blocks: using existing mapping for inode %lu, ex [%d/%d/%llu] (initialized)\n", inode->i_ino, ee_block, ee_len, ee_start);
 				}
 
 				ext4_ext_show_leaf(inode, path);
@@ -4221,7 +4221,7 @@ int ext4_ext_map_blocks(handle_t *handle, struct inode *inode,
 				allocated = ret;
 
 				if (ext4_track_block_lifecycle(inode, allocated, EXT4_BLOCK_BIRTH | EXT4_BLOCK_DEATH)) {
-					// pr_info("ext4: using existing mapping for inode %lu, ex [%d/%d/%llu] (unwritten)\n", inode->i_ino, ee_block, ee_len, ee_start);
+					pr_info("ext4_ext_map_blocks: using existing mapping for inode %lu, ex [%d/%d/%llu] (unwritten)\n", inode->i_ino, ee_block, ee_len, ee_start);
 				}
 			}
 			goto out;
@@ -4259,7 +4259,7 @@ int ext4_ext_map_blocks(handle_t *handle, struct inode *inode,
 
 		/* Through cluster allocation */
 		if (ext4_track_block_lifecycle(inode, map->m_len, EXT4_BLOCK_BIRTH)) {
-			// pr_info("ext4: using existing mapping for inode %lu, ex [%d/%d/%llu] (cluster)\n", inode->i_ino, le32_to_cpu(ex->ee_block), ext4_ext_get_actual_len(ex), ext4_ext_pblock(ex));
+			pr_info("ext4_ext_map_blocks: using existing mapping for inode %lu, ex [%d/%d/%llu] (cluster)\n", inode->i_ino, le32_to_cpu(ex->ee_block), ext4_ext_get_actual_len(ex), ext4_ext_pblock(ex));
 		}
 		goto got_allocated_blocks;
 	}
@@ -4345,7 +4345,7 @@ int ext4_ext_map_blocks(handle_t *handle, struct inode *inode,
 
 	/** Successfully allocated physical blocks */
 	if (ext4_track_block_lifecycle(inode, allocated, EXT4_BLOCK_BIRTH)) {
-		// pr_info("ext4: allocated %u blocks for inode %lu, ex [%d/%d/%llu]\n", allocated, inode->i_ino, le32_to_cpu(newex.ee_block), le16_to_cpu(newex.ee_len));
+		pr_info("ext4_ext_map_blocks: allocated %u blocks for inode %lu, ex [%d/%d/%llu]\n", allocated, inode->i_ino, le32_to_cpu(newex.ee_block), le16_to_cpu(newex.ee_len));
 	}
 
 got_allocated_blocks:
