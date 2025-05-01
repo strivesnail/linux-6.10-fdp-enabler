@@ -2776,7 +2776,7 @@ static inline int ext4_track_block_lifecycle(struct inode *inode, unsigned long 
 			if (atomic_read(&stats->tracking_started)) {
 				death_diff = atomic64_read(&stats->deaths) - atomic64_read(&stats->previous_death);
 				if (death_diff > atomic64_read(&stats->initial_alive)) {
-					u64 death_distance = current_logical_clock - atomic64_read(&stats->first_timestamp);
+					// u64 death_distance = current_logical_clock - atomic64_read(&stats->first_timestamp);
 
 					// pr_info("gclock=%llu, Finode=%u, dd=%llu, death_diff=%llu, alive=%llu (death distance) \n", \
 					// 	current_logical_clock, le32_to_cpu(inode->i_ino), \
