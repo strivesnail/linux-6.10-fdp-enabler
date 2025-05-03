@@ -533,7 +533,7 @@ CFLAGS_MODULE   =
 RUSTFLAGS_MODULE =
 AFLAGS_MODULE   =
 LDFLAGS_MODULE  =
-CFLAGS_KERNEL	=
+CFLAGS_KERNEL	= -Wno-error=comment -Wno-error=format -Wno-error=unused-function
 RUSTFLAGS_KERNEL =
 AFLAGS_KERNEL	=
 LDFLAGS_vmlinux =
