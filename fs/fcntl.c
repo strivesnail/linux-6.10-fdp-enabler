@@ -320,9 +320,13 @@ static long fcntl_set_rw_hint(struct file *file, unsigned int cmd,
 	// we assume all the fcntl syscall are initiated by RocksDB
 	// and this hint is the level of the SSTable inside RocksDB
 
-	u64 pid = current->pid;
+	u64 owner_id = current->pid;
 
-	hint = fdp_get_placehandler(pid, hint);
+	fdp_record_logic_clock(inode->i_ino);
+
+	hint = fdp_get_placehandler(owner_id, hint);
+
+	hint = WRITE_LIFE_NOT_SET;
 
 	WRITE_ONCE(inode->i_write_hint, hint);
 

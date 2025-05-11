@@ -16,6 +16,7 @@
  */
 
 #include "linux/fdp.h"
+#include "linux/rw_hint.h"
 #include "linux/time64.h"
 #include <linux/init.h>
 #include <linux/export.h>
@@ -4349,20 +4350,6 @@ int vfs_unlink(struct mnt_idmap *idmap, struct inode *dir,
 	}
 out:
 	inode_unlock(target);
-
-	// get inode lifetime
-
-	struct timespec64 inode_creation_time = inode_get_ctime(target);
-
-	struct timespec64 current_time;
-	ktime_get_real_ts64(&current_time);
-	struct timespec64 inode_lifetime =
-		timespec64_sub(current_time, inode_creation_time);
-
-	// add a call to fdp to add lifetime info
-
-	fdp_add_info(current->pid, timespec64_to_ns(&inode_lifetime),
-		     target->i_write_hint);
 
 	/* We don't d_delete() NFS sillyrenamed files--they still exist. */
 	if (!error && dentry->d_flags & DCACHE_NFSFS_RENAMED) {
