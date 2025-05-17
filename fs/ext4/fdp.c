@@ -7,19 +7,37 @@ atomic64_t fdp_logic_clock = ATOMIC64_INIT(0);
 
 DEFINE_XARRAY(fdp_xa);
 
+struct fdp_ops __rcu *fdp_rcu_ops = NULL;
+
+EXPORT_SYMBOL(fdp_rcu_ops);
+
 void fdp_add_info(uint64_t owner_id, uint64_t lifetime, enum rw_hint hint)
 {
-	printk(KERN_INFO
-	       "fdp_add_info: called by %llu with hint: %d with lifetime: %llu",
-	       owner_id, hint, lifetime);
+	struct fdp_ops *ops;
+	pr_debug(
+		"fdp_add_info: called by %llu with hint: %d with lifetime: %llu",
+		owner_id, hint, lifetime);
+	rcu_read_lock();
+	ops = rcu_dereference(fdp_rcu_ops);
+	if (ops) {
+		ops->add_info(owner_id, lifetime, hint);
+	}
+	rcu_read_unlock();
 }
 
 enum rw_hint fdp_get_placehandler(uint64_t owner_id, enum rw_hint hint)
 {
-	printk(KERN_INFO "fdp_get_placehandler: called by %llu with hint: %d",
-	       owner_id, hint);
-
-	return hint;
+	enum rw_hint ret = hint;
+	struct fdp_ops *ops;
+	pr_debug("fdp_get_placehandler: called by %llu with hint: %d", owner_id,
+		 hint);
+	rcu_read_lock();
+	ops = rcu_dereference(fdp_rcu_ops);
+	if (ops) {
+		ret = ops->get_placehandler(owner_id, hint);
+	}
+	rcu_read_unlock();
+	return ret;
 }
 
 void fdp_record_logic_clock(uint64_t file_id)

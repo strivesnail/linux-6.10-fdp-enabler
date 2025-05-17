@@ -4,6 +4,14 @@
 #include <linux/rw_hint.h>
 #include <linux/xarray.h>
 
+struct fdp_ops {
+	void (*add_info)(uint64_t owner_id, uint64_t lifetime,
+			 enum rw_hint hint);
+	enum rw_hint (*get_placehandler)(uint64_t owner_id, enum rw_hint hint);
+};
+
+extern struct fdp_ops __rcu *fdp_rcu_ops;
+
 /// Global logic clock: monotonically increasing, indicating the current clock tiks
 /// everytime we fall a fcntl(.., SET_RW_HINT, ..) on a new file, it will increment this logic clock by 1
 extern atomic64_t fdp_logic_clock;

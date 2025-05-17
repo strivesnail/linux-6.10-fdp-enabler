@@ -6417,7 +6417,7 @@ static void ext4_mb_clear_bb(handle_t *handle, struct inode *inode,
 	ext4_grpblk_t changed;
 
 	if (ext4_track_block_lifecycle(inode, 0, EXT4_BLOCK_DEATH)) {
-		pr_info("ext4_mb_clear_bb: Free blocks inode no. %lu inode i_enable_track %d block %llu count %lu flags %d\n",
+		pr_debug("ext4_mb_clear_bb: Free blocks inode no. %lu inode i_enable_track %d block %llu count %lu flags %d\n",
 			inode->i_ino, EXT4_I(inode)->i_enable_track, block, count, flags);
 	}
 
