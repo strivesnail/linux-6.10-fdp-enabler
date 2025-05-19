@@ -286,7 +286,7 @@ static bool rw_hint_valid(u64 hint)
 	case RWH_WRITE_LIFE_MEDIUM:
 	case RWH_WRITE_LIFE_LONG:
 	case RWH_WRITE_LIFE_EXTREME:
-		printk(KERN_INFO "rw_hint_valid : RWH_WRITE_LIFE %llu\n", hint);
+		pr_debug("rw_hint_valid : RWH_WRITE_LIFE %llu\n", hint);
 		return true;
 	default:
 		return false;

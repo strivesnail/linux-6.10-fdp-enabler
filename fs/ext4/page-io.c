@@ -552,7 +552,9 @@ int ext4_bio_write_folio(struct ext4_io_submit *io, struct folio *folio,
 	}
 
 	__folio_start_writeback(folio, keep_towrite);
-
+	if (io->io_bio) {
+		io->io_bio->bi_write_hint = inode->i_write_hint;
+	}
 	/* Now submit buffers to write */
 	do {
 		if (!buffer_async_write(bh))
