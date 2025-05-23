@@ -326,6 +326,8 @@ static long fcntl_set_rw_hint(struct file *file, unsigned int cmd,
 
 	hint = fdp_get_placehandler(owner_id, hint);
 
+	hint = 0;
+
 	WRITE_ONCE(inode->i_write_hint, hint);
 
 	/*
