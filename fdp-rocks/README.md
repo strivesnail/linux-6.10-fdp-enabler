@@ -26,7 +26,7 @@ evaluated WARP configuration exposes 15. `fcntl_set_rw_hint` logs one
 
 ```bash
 sudo apt-get install -y build-essential libncurses-dev flex bison bc \
-    libssl-dev libelf-dev dwarves fakeroot cpio rsync
+    libssl-dev libelf-dev dwarves fakeroot cpio rsync debhelper
 git clone -b fdp-rocks-atc26 \
     https://github.com/strivesnail/linux-6.10-fdp-enabler.git
 cd linux-6.10-fdp-enabler
