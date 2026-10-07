@@ -31,10 +31,27 @@ enum rw_hint fdp_get_placehandler(uint64_t owner_id, enum rw_hint hint)
 	struct fdp_ops *ops;
 	pr_debug("fdp_get_placehandler: called by %llu with hint: %d", owner_id,
 		 hint);
+	
+	/* For extended hint values (6-15), use the hint value directly as handle.
+	 * The driver may not support extended hints, so we bypass the driver
+	 * mapping for these values.
+	 */
+	if (hint > WRITE_LIFE_EXTREME) {
+		pr_info("fdp_get_placehandler: extended hint %d, using directly as handle\n", hint);
+		return hint;
+	}
+	
 	rcu_read_lock();
 	ops = rcu_dereference(fdp_rcu_ops);
 	if (ops) {
 		ret = ops->get_placehandler(owner_id, hint);
+		/* If driver returns 0 for hint > 0, it may indicate an error.
+		 * Fall back to original hint for safety.
+		 */
+		if (ret == WRITE_LIFE_NOT_SET && hint != WRITE_LIFE_NOT_SET) {
+			pr_debug("fdp_get_placehandler: driver returned 0 for hint %d, using original hint", hint);
+			ret = hint;
+		}
 	}
 	rcu_read_unlock();
 	return ret;

@@ -279,18 +279,12 @@ static bool rw_hint_valid(u64 hint)
 	BUILD_BUG_ON(WRITE_LIFE_LONG != RWH_WRITE_LIFE_LONG);
 	BUILD_BUG_ON(WRITE_LIFE_EXTREME != RWH_WRITE_LIFE_EXTREME);
 
-	switch (hint) {
-	case RWH_WRITE_LIFE_NOT_SET:
-	case RWH_WRITE_LIFE_NONE:
-	case RWH_WRITE_LIFE_SHORT:
-	case RWH_WRITE_LIFE_MEDIUM:
-	case RWH_WRITE_LIFE_LONG:
-	case RWH_WRITE_LIFE_EXTREME:
+	/* Accept hint values from 0 to RWH_WRITE_LIFE_MAX (15) */
+	if (hint <= RWH_WRITE_LIFE_MAX) {
 		pr_debug("rw_hint_valid : RWH_WRITE_LIFE %llu\n", hint);
 		return true;
-	default:
-		return false;
 	}
+	return false;
 }
 
 static long fcntl_get_rw_hint(struct file *file, unsigned int cmd,
@@ -325,10 +319,13 @@ static long fcntl_set_rw_hint(struct file *file, unsigned int cmd,
 	fdp_record_logic_clock(inode->i_ino);
 
 	hint = fdp_get_placehandler(owner_id, hint);
-
-	hint = 0;
+	pr_info("fcntl_set_rw_hint: after fdp_get_placehandler, hint=%d\n", hint);
+	
+	// set to non-fdp
+	// hint = 0;
 
 	WRITE_ONCE(inode->i_write_hint, hint);
+	pr_info("fcntl_set_rw_hint: set inode->i_write_hint=%d\n", (int)inode->i_write_hint);
 
 	/*
 	 * file->f_mapping->host may differ from inode. As an example,

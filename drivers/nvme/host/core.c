@@ -2167,6 +2167,7 @@ static int nvme_fetch_fdp_plids(struct nvme_ns *ns, u32 nsid)
 	}
 
 	ns->head->nr_plids = le16_to_cpu(ruhs->nruhsd);
+	dev_info(ns->ctrl->device, "FDP: nr_plids read from SSD = %d\n", ns->head->nr_plids);
 	if (!ns->head->nr_plids)
 		goto out;
 
@@ -2176,6 +2177,7 @@ static int nvme_fetch_fdp_plids(struct nvme_ns *ns, u32 nsid)
 			ns->head->nr_plids, max_nr_plids);
 		ns->head->nr_plids = max_nr_plids;
 	}
+	dev_info(ns->ctrl->device, "FDP: final nr_plids = %d\n", ns->head->nr_plids);
 
 	head->plids = kcalloc(ns->head->nr_plids, sizeof(head->plids),
 			      GFP_KERNEL);
